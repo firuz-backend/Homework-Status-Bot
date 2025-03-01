@@ -1,11 +1,31 @@
-...
+import logging
+import os
+import time
+from http import HTTPStatus
+
+import requests
+from dotenv import load_dotenv
+from requests import RequestException
+from telebot import TeleBot
+
+from custom_exceptions import (
+    EndpointUnavailableError, HomeworksFormatError, KeysAvailibilityError,
+    ResponseFormatError, TokenAvailabilityError
+)
+
+
+logging.basicConfig(
+    format='%(lineno)d, %(asctime)s, %(levelname)s, %(message)s',
+    level=logging.DEBUG
+)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 
-PRACTICUM_TOKEN = ...
-TELEGRAM_TOKEN = ...
-TELEGRAM_CHAT_ID = ...
+PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
@@ -20,47 +40,107 @@ HOMEWORK_VERDICTS = {
 
 
 def check_tokens():
-    ...
+    """The function is for checking tokens."""
+    tokens = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
+    missing_tokens = [token for token in tokens if not globals().get(token)]
+
+    missing_tokens_text = ", ".join(missing_tokens)
+
+    if missing_tokens:
+        logger.critical(f'Not found the token-vars: {missing_tokens_text}')
+        raise TokenAvailabilityError(
+            f'Please, first define the vars {missing_tokens_text}'
+        )
+    logger.debug('Token-vars was checked and was found.')
 
 
 def send_message(bot, message):
-    ...
+    """This function is for sending notification about status."""
+    try:
+        bot.send_message(TELEGRAM_CHAT_ID, text=message)
+        logger.debug('Message was sent')
+    except Exception as error:
+        logger.error(f'Error during sending message {error}', exc_info=True)
 
 
 def get_api_answer(timestamp):
-    ...
+    """This functions is for getting answer by API."""
+    try:
+        response = requests.get(
+            ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
+        )
+
+        if response.status_code != HTTPStatus.OK:
+            text = f'Endpoint is not available, got {response.status_code}'
+            logger.error(text)
+            raise EndpointUnavailableError(text)
+    except RequestException as error:
+        logger.error(f"Error while accessing endpoint: {error}")
+        return None
+
+    logger.debug('Got success response by API Practicum')
+    return response.json()
 
 
 def check_response(response):
-    ...
+    """This function is for checking answer agree with documentation."""
+    if not isinstance(response, dict):
+        text = f'Expected dict, got {type(response)}'
+        logger.error(text)
+        raise ResponseFormatError(text)
+
+    if not isinstance(response.get('homeworks'), list):
+        text = f'Expected list, got {type(response)}'
+        logger.error(text)
+        raise HomeworksFormatError(text)
+
+    return True
 
 
 def parse_status(homework):
-    ...
+    """This function is for getting needed value by dict."""
+    keys = {"status", "homework_name"}
+
+    for key in keys:
+        if key not in homework:
+            text = f'Expected keys, {key}, not found'
+            logger.error(text, exc_info=True)
+            raise KeysAvailibilityError(text)
+
+    if homework['status'] not in HOMEWORK_VERDICTS:
+        text = f'Type of statuses, not found. Got {homework["status"]}'
+        logger.error(text)
+        raise KeysAvailibilityError(text)
+
+    verdict = HOMEWORK_VERDICTS[homework['status']]
+    homework_name = homework['homework_name']
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main():
     """Основная логика работы бота."""
+    check_tokens()
 
-    ...
-
-    # Создаем объект класса бота
-    bot = ...
+    bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-
-    ...
 
     while True:
         try:
+            response_dict = get_api_answer(timestamp)
+            if check_response(response_dict):
+                if response_dict.get('homeworks'):
+                    text = parse_status(response_dict.get('homeworks')[0])
+                    send_message(bot, text)
 
-            ...
+            timestamp = response_dict.get('current_date')
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            ...
-        ...
+            logger.error(message)
+            send_message(bot, message)
+
+        time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':

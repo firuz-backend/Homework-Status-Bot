@@ -48,3 +48,11 @@ class HomeworksFormatError(FormatTypeError):
     def __init__(self, message):
         """Will be send message about error."""
         super().__init__(message)
+
+
+class APIRequestException(IOError):
+    """Calls: when got exception while sending request to API."""
+
+    def __init__(self, error):
+        """Will be send message about error."""
+        super().__init__(f'Got Exception during request to API: {error}')

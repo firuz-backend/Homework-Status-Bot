@@ -10,7 +10,7 @@ from telebot import TeleBot
 
 from custom_exceptions import (
     EndpointUnavailableError, HomeworksFormatError, KeysAvailibilityError,
-    ResponseFormatError, TokenAvailabilityError
+    ResponseFormatError, TokenAvailabilityError, APIRequestException
 )
 
 
@@ -69,14 +69,12 @@ def get_api_answer(timestamp):
         response = requests.get(
             ENDPOINT, headers=HEADERS, params={'from_date': timestamp}
         )
-
-        if response.status_code != HTTPStatus.OK:
-            text = f'Endpoint is not available, got {response.status_code}'
-            logger.error(text)
-            raise EndpointUnavailableError(text)
     except RequestException as error:
-        logger.error(f"Error while accessing endpoint: {error}")
-        return None
+        raise APIRequestException(error)
+
+    if response.status_code != HTTPStatus.OK:
+        text = f'Endpoint is not available, got {response.status_code}'
+        raise EndpointUnavailableError(text)
 
     logger.debug('Got success response by API Practicum')
     return response.json()
@@ -85,32 +83,26 @@ def get_api_answer(timestamp):
 def check_response(response):
     """This function is for checking answer agree with documentation."""
     if not isinstance(response, dict):
-        text = f'Expected dict, got {type(response)}'
-        logger.error(text)
-        raise ResponseFormatError(text)
+        raise ResponseFormatError(f'Expected dict, got {type(response)}')
 
-    if not isinstance(response.get('homeworks'), list):
-        text = f'Expected list, got {type(response)}'
-        logger.error(text)
-        raise HomeworksFormatError(text)
+    if 'homeworks' not in response or not (
+            isinstance(response['homeworks'], list)):
+        raise HomeworksFormatError(f'Expected list, got {type(response)}')
 
     return True
 
 
 def parse_status(homework):
     """This function is for getting needed value by dict."""
-    keys = {"status", "homework_name"}
+    if 'status' not in homework:
+        raise KeysAvailibilityError('Expected keys: status not found')
 
-    for key in keys:
-        if key not in homework:
-            text = f'Expected keys, {key}, not found'
-            logger.error(text, exc_info=True)
-            raise KeysAvailibilityError(text)
+    if 'homework_name' not in homework:
+        raise KeysAvailibilityError('Expected keys: homework_name not found')
 
     if homework['status'] not in HOMEWORK_VERDICTS:
-        text = f'Type of statuses, not found. Got {homework["status"]}'
-        logger.error(text)
-        raise KeysAvailibilityError(text)
+        raise KeysAvailibilityError(
+            f'Type of statuses, not found. Got {homework["status"]}')
 
     verdict = HOMEWORK_VERDICTS[homework['status']]
     homework_name = homework['homework_name']
@@ -130,8 +122,10 @@ def main():
             response_dict = get_api_answer(timestamp)
             if check_response(response_dict):
                 if response_dict.get('homeworks'):
-                    text = parse_status(response_dict.get('homeworks')[0])
+                    text = parse_status(response_dict['homeworks'][0])
                     send_message(bot, text)
+                else:
+                    logger.debug('New Homeworks statuses not found')
 
             timestamp = response_dict.get('current_date')
 
@@ -139,8 +133,8 @@ def main():
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
             send_message(bot, message)
-
-        time.sleep(RETRY_PERIOD)
+        finally:
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':

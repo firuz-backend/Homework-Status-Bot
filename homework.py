@@ -85,8 +85,10 @@ def check_response(response):
     if not isinstance(response, dict):
         raise ResponseFormatError(f'Expected dict, got {type(response)}')
 
-    if 'homeworks' not in response or not (
-            isinstance(response['homeworks'], list)):
+    if 'homeworks' not in response:
+        raise HomeworksFormatError(f'Expected list, got {type(response)}')
+
+    if not isinstance(response['homeworks'], list):
         raise HomeworksFormatError(f'Expected list, got {type(response)}')
 
     return True
@@ -100,11 +102,13 @@ def parse_status(homework):
     if 'homework_name' not in homework:
         raise KeysAvailibilityError('Expected keys: homework_name not found')
 
-    if homework['status'] not in HOMEWORK_VERDICTS:
-        raise KeysAvailibilityError(
-            f'Type of statuses, not found. Got {homework["status"]}')
+    homework_status = homework['status']
 
-    verdict = HOMEWORK_VERDICTS[homework['status']]
+    if homework_status not in HOMEWORK_VERDICTS:
+        raise KeysAvailibilityError(
+            f'Type of statuses, not found. Got {homework_status}')
+
+    verdict = HOMEWORK_VERDICTS[homework_status]
     homework_name = homework['homework_name']
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'

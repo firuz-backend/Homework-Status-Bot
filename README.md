@@ -75,5 +75,6 @@ python homework.py
 
 
 📌 Автор
+
     👨‍💻 Firuz Dadabaev — Python Backend Developer
     GitHub: firuz-backend

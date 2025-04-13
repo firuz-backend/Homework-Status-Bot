@@ -53,15 +53,17 @@ pip install -r requirements.txt
 
 Где взять токены:
 
-PRACTICUM_TOKEN — в профиле на Яндекс Практикуме.
+    PRACTICUM_TOKEN — в профиле на Яндекс Практикуме.
 
-TELEGRAM_TOKEN — через @BotFather в Telegram.
+    TELEGRAM_TOKEN — через @BotFather в Telegram.
 
-TELEGRAM_CHAT_ID — через @userinfobot в Telegram.
+    TELEGRAM_CHAT_ID — через @userinfobot в Telegram.
 
 📌 Запуск
 
 python homework.py
+
+
 📌 Структура проекта
 
 homework_bot/
